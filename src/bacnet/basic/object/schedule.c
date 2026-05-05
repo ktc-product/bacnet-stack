@@ -18,14 +18,20 @@
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/object/device.h" /* me */
 #include "bacnet/basic/object/schedule.h"
+#ifdef CONFIG_BACNETSTACK
+#include <memattr.h>
+#endif
 
 #define UNUSED(v) (void)(v)
 
 #ifndef MAX_SCHEDULES
 #define MAX_SCHEDULES 4
 #endif
+#ifndef BACNET_HEAP_MEM_REGION
+#define BACNET_HEAP_MEM_REGION
+#endif
 
-static SCHEDULE_DESCR Schedule_Descrs[MAX_NUM_DEVICES][MAX_SCHEDULES];
+static BACNET_HEAP_MEM_REGION SCHEDULE_DESCR Schedule_Descrs[MAX_NUM_DEVICES][MAX_SCHEDULES];
 #ifdef BAC_ROUTING
 #define Schedule_Descr (Schedule_Descrs[Routed_Device_Object_Index()])
 #else
