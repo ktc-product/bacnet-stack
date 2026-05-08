@@ -31,6 +31,7 @@ struct object_data {
     bool Write_Enabled : 1;
     uint8_t Present_Value;
     uint8_t Reliability;
+    uint32_t State_Count_Override; /* if non-zero, overrides state_name_count(State_Text) */
     const char *Object_Name;
     /* The state text functions expect a list of C strings separated by '\0' */
     const char *State_Text;
@@ -242,10 +243,24 @@ uint32_t Multistate_Value_Max_States(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        count = state_name_count(pObject->State_Text);
+        count = pObject->State_Count_Override
+            ? pObject->State_Count_Override
+            : state_name_count(pObject->State_Text);
     }
 
     return count;
+}
+
+bool Multistate_Value_Max_States_Set(uint32_t object_instance, uint32_t max_states)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (!pObject) {
+        return false;
+    }
+    pObject->State_Count_Override = max_states;
+    return true;
 }
 
 /**
@@ -380,7 +395,9 @@ bool Multistate_Value_Present_Value_Set(
 
     pObject = Multistate_Value_Object(object_instance);
     if (pObject) {
-        max_states = state_name_count(pObject->State_Text);
+        max_states = pObject->State_Count_Override
+            ? pObject->State_Count_Override
+            : state_name_count(pObject->State_Text);
         if ((value >= 1) && (value <= max_states)) {
             Multistate_Value_Present_Value_COV_Detect(pObject, value);
             pObject->Present_Value = value;
@@ -414,7 +431,9 @@ static bool Multistate_Value_Present_Value_Write(
 
     pObject = Multistate_Value_Object(object_instance);
     if (pObject) {
-        max_states = state_name_count(pObject->State_Text);
+        max_states = pObject->State_Count_Override
+            ? pObject->State_Count_Override
+            : state_name_count(pObject->State_Text);
         if ((value >= 1) && (value <= max_states)) {
             if (pObject->Write_Enabled) {
                 old_value = pObject->Present_Value;
