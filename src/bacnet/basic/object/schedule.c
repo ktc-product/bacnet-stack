@@ -276,12 +276,36 @@ bool Schedule_Object_Name(
 
     index = Schedule_Instance_To_Index(object_instance);
     if (index < MAX_SCHEDULES) {
-        snprintf(
-            text, sizeof(text), "SCHEDULE %lu", (unsigned long)object_instance);
-        status = characterstring_init_ansi(object_name, text);
+        SCHEDULE_DESCR *pSched = Schedule_Object(object_instance);
+        if (pSched && pSched->custom_name[0] != '\0') {
+            status = characterstring_init_ansi(object_name, pSched->custom_name);
+        } else {
+            snprintf(text, sizeof(text), "SCHEDULE %lu",
+                     (unsigned long)object_instance);
+            status = characterstring_init_ansi(object_name, text);
+        }
     }
 
     return status;
+}
+
+/**
+ * @brief Sets a custom name for a Schedule object
+ * @param object_instance - object-instance number of the object
+ * @param name - custom name string, or NULL/empty to revert to default
+ */
+void Schedule_Name_Set(uint32_t object_instance, const char *name)
+{
+    SCHEDULE_DESCR *pSched = Schedule_Object(object_instance);
+    if (!pSched) {
+        return;
+    }
+    if (name && name[0] != '\0') {
+        strncpy(pSched->custom_name, name, sizeof(pSched->custom_name) - 1);
+        pSched->custom_name[sizeof(pSched->custom_name) - 1] = '\0';
+    } else {
+        pSched->custom_name[0] = '\0';
+    }
 }
 
 /**

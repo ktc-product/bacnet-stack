@@ -58,6 +58,7 @@ typedef struct schedule {
     uint8_t obj_prop_ref_cnt; /* actual number of obj_prop references */
     uint8_t Priority_For_Writing; /* (1..16) */
     bool Out_Of_Service;
+    char custom_name[62]; /* empty string = use default "SCHEDULE N" */
 } SCHEDULE_DESCR;
 
 BACNET_STACK_EXPORT
@@ -131,6 +132,8 @@ bool Schedule_Effective_Period(
 BACNET_STACK_EXPORT
 bool Schedule_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
+BACNET_STACK_EXPORT
+void Schedule_Name_Set(uint32_t object_instance, const char *name);
 
 BACNET_STACK_EXPORT
 int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
