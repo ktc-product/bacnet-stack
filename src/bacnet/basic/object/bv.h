@@ -139,6 +139,8 @@ void Binary_Value_Cleanup(void);
 
 BACNET_STACK_EXPORT
 unsigned Binary_Value_Event_State(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Binary_Value_Event_State_Set(uint32_t object_instance, unsigned state);
 
 #if defined(INTRINSIC_REPORTING) && (BINARY_VALUE_INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT

@@ -1423,6 +1423,22 @@ unsigned Binary_Value_Event_State(uint32_t object_instance)
     return state;
 }
 
+bool Binary_Value_Event_State_Set(uint32_t object_instance, unsigned state)
+{
+#if defined(INTRINSIC_REPORTING) && (BINARY_VALUE_INTRINSIC_REPORTING)
+    struct object_data *pObject = Binary_Value_Object(object_instance);
+    if (!pObject) {
+        return false;
+    }
+    pObject->Event_State = state;
+    return true;
+#else
+    (void)object_instance;
+    (void)state;
+    return false;
+#endif
+}
+
 #if defined(INTRINSIC_REPORTING) && (BINARY_VALUE_INTRINSIC_REPORTING)
 /**
  * For a given object instance-number, gets the event-detection-enable property

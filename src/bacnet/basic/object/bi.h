@@ -108,6 +108,8 @@ void Binary_Input_Out_Of_Service_Set(uint32_t object_instance, bool value);
 
 BACNET_STACK_EXPORT
 unsigned Binary_Input_Event_State(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Binary_Input_Event_State_Set(uint32_t object_instance, unsigned state);
 
 BACNET_STACK_EXPORT
 bool Binary_Input_Encode_Value_List(

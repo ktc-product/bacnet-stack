@@ -99,6 +99,10 @@ BACNET_RELIABILITY Analog_Input_Reliability(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Analog_Input_Reliability_Set(
     uint32_t object_instance, BACNET_RELIABILITY value);
+BACNET_STACK_EXPORT
+unsigned Analog_Input_Event_State(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Input_Event_State_Set(uint32_t object_instance, unsigned state);
 
 BACNET_STACK_EXPORT
 bool Analog_Input_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS units);

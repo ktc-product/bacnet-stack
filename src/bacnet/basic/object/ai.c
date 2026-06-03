@@ -359,6 +359,22 @@ unsigned Analog_Input_Event_State(uint32_t object_instance)
     return state;
 }
 
+bool Analog_Input_Event_State_Set(uint32_t object_instance, unsigned state)
+{
+#if defined(INTRINSIC_REPORTING)
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+    if (!pObject) {
+        return false;
+    }
+    pObject->Event_State = state;
+    return true;
+#else
+    (void)object_instance;
+    (void)state;
+    return false;
+#endif
+}
+
 #if defined(INTRINSIC_REPORTING)
 /**
  * For a given object instance-number, returns the notification_class property
