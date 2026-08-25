@@ -32,10 +32,15 @@
 #endif
 
 static BACNET_HEAP_MEM_REGION SCHEDULE_DESCR Schedule_Descrs[MAX_NUM_DEVICES][MAX_SCHEDULES];
+/* Objects are created on demand by Schedule_Create(); only created instances
+   are visible to the object list, ReadProperty and WriteProperty. */
+static bool Schedule_In_Uses[MAX_NUM_DEVICES][MAX_SCHEDULES];
 #ifdef BAC_ROUTING
 #define Schedule_Descr (Schedule_Descrs[Routed_Device_Object_Index()])
+#define Schedule_In_Use (Schedule_In_Uses[Routed_Device_Object_Index()])
 #else
 #define Schedule_Descr (Schedule_Descrs[0])
+#define Schedule_In_Use (Schedule_In_Uses[0])
 #endif
 
 static const int32_t Schedule_Properties_Required[] = {
@@ -141,20 +146,16 @@ SCHEDULE_DESCR *Schedule_Object(uint32_t object_instance)
 }
 
 /**
- * @brief Initialize the Schedule object data
+ * @brief Reset one Schedule object slot to its power-up defaults
+ * @param psched - pointer to the object slot to reset
  */
-void Schedule_Init(void)
+static void Schedule_Descr_Init(SCHEDULE_DESCR *psched)
 {
-    uint16_t dev_id;
-    unsigned i, j;
+    unsigned j;
     BACNET_DATE start_date = { 0 }, end_date = { 0 };
-    SCHEDULE_DESCR *psched;
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
     unsigned e;
     BACNET_SPECIAL_EVENT *event;
-#endif
-#ifdef BAC_ROUTING
-    uint16_t current_dev_id = Routed_Device_Object_Index();
 #endif
 
     /* whole year, change as necessary */
@@ -164,49 +165,96 @@ void Schedule_Init(void)
     datetime_set_date(&end_date, 0, 12, 31);
     datetime_wildcard_year_set(&end_date);
     datetime_wildcard_weekday_set(&end_date);
-    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
-#ifdef BAC_ROUTING
-        Set_Routed_Device_Object_Index(dev_id);
-#endif
-        for (i = 0; i < MAX_SCHEDULES; i++) {
-            psched = &Schedule_Descr[i];
-            datetime_copy_date(&psched->Start_Date, &start_date);
-            datetime_copy_date(&psched->End_Date, &end_date);
-            for (j = 0; j < BACNET_WEEKLY_SCHEDULE_SIZE; j++) {
-                psched->Weekly_Schedule[j].TV_Count = 0;
-            }
-            memcpy(
-                &psched->Present_Value, &psched->Schedule_Default,
-                sizeof(psched->Present_Value));
-            psched->Schedule_Default.context_specific = false;
-            psched->Schedule_Default.tag = BACNET_APPLICATION_TAG_REAL;
-            psched->Schedule_Default.type.Real =
-                21.0f; /* 21 C, room temperature */
-            psched->obj_prop_ref_cnt = 0; /* no references, add as needed */
-            psched->Priority_For_Writing = 16; /* lowest priority */
-            psched->Out_Of_Service = false;
+
+    datetime_copy_date(&psched->Start_Date, &start_date);
+    datetime_copy_date(&psched->End_Date, &end_date);
+    for (j = 0; j < BACNET_WEEKLY_SCHEDULE_SIZE; j++) {
+        psched->Weekly_Schedule[j].TV_Count = 0;
+    }
+    psched->Schedule_Default.context_specific = false;
+    psched->Schedule_Default.tag = BACNET_APPLICATION_TAG_REAL;
+    psched->Schedule_Default.type.Real = 21.0f; /* 21 C, room temperature */
+    memcpy(
+        &psched->Present_Value, &psched->Schedule_Default,
+        sizeof(psched->Present_Value));
+    psched->obj_prop_ref_cnt = 0; /* no references, add as needed */
+    psched->Priority_For_Writing = 16; /* lowest priority */
+    psched->Out_Of_Service = false;
+    psched->custom_name[0] = '\0';
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
-            for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
-                event = &psched->Exception_Schedule[e];
-                event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
-                event->period.calendarEntry.tag = BACNET_CALENDAR_DATE_RANGE;
-                datetime_copy_date(
-                    &event->period.calendarEntry.type.DateRange.startdate,
-                    &start_date);
-                datetime_copy_date(
-                    &event->period.calendarEntry.type.DateRange.enddate,
-                    &end_date);
-                event->period.calendarEntry.next = NULL;
-                event->timeValues.TV_Count = 0;
-                event->priority = 16;
-            }
+    for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
+        event = &psched->Exception_Schedule[e];
+        event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
+        event->period.calendarEntry.tag = BACNET_CALENDAR_DATE_RANGE;
+        datetime_copy_date(
+            &event->period.calendarEntry.type.DateRange.startdate, &start_date);
+        datetime_copy_date(
+            &event->period.calendarEntry.type.DateRange.enddate, &end_date);
+        event->period.calendarEntry.next = NULL;
+        event->timeValues.TV_Count = 0;
+        event->priority = 16;
+    }
 #endif
+}
+
+/**
+ * @brief Initialize the Schedule object data
+ *
+ * No Schedule object exists until Schedule_Create() is called for it, so a
+ * device that defines no schedules does not advertise any.
+ */
+void Schedule_Init(void)
+{
+    uint16_t dev_id;
+    unsigned i;
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+        for (i = 0; i < MAX_SCHEDULES; i++) {
+            Schedule_In_Uses[dev_id][i] = false;
         }
     }
+}
 
-#ifdef BAC_ROUTING
-    Set_Routed_Device_Object_Index(current_dev_id);
-#endif
+/**
+ * @brief Create a Schedule object
+ * @param object_instance - object-instance number to create, 0..MAX_SCHEDULES-1
+ * @return the object-instance number created, or BACNET_MAX_INSTANCE on failure
+ */
+uint32_t Schedule_Create(uint32_t object_instance)
+{
+    if (object_instance >= MAX_SCHEDULES) {
+        return BACNET_MAX_INSTANCE;
+    }
+    if (!Schedule_In_Use[object_instance]) {
+        Schedule_Descr_Init(&Schedule_Descr[object_instance]);
+        Schedule_In_Use[object_instance] = true;
+    }
+
+    return object_instance;
+}
+
+/**
+ * @brief Delete a Schedule object
+ * @param object_instance - object-instance number of the object to delete
+ * @return true if the object was deleted, and false if it did not exist
+ */
+bool Schedule_Delete(uint32_t object_instance)
+{
+    if ((object_instance >= MAX_SCHEDULES) ||
+        !Schedule_In_Use[object_instance]) {
+        return false;
+    }
+    Schedule_In_Use[object_instance] = false;
+
+    return true;
+}
+
+/**
+ * @brief Delete every Schedule object of every device
+ */
+void Schedule_Cleanup(void)
+{
+    Schedule_Init();
 }
 
 /**
@@ -216,12 +264,8 @@ void Schedule_Init(void)
  */
 bool Schedule_Valid_Instance(uint32_t object_instance)
 {
-    unsigned int index = Schedule_Instance_To_Index(object_instance);
-    if (index < MAX_SCHEDULES) {
-        return true;
-    } else {
-        return false;
-    }
+    return (object_instance < MAX_SCHEDULES) &&
+        Schedule_In_Use[object_instance];
 }
 
 /**
@@ -230,7 +274,15 @@ bool Schedule_Valid_Instance(uint32_t object_instance)
  */
 unsigned Schedule_Count(void)
 {
-    return MAX_SCHEDULES;
+    unsigned i, count = 0;
+
+    for (i = 0; i < MAX_SCHEDULES; i++) {
+        if (Schedule_In_Use[i]) {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 /**
@@ -238,23 +290,40 @@ unsigned Schedule_Count(void)
  * @param  index - index number of the object
  * @return object instance number for the given index, or MAX_SCHEDULES if the
  * index is not valid
+ *
+ * Note: index is a dense 0..Schedule_Count()-1 position used by the device
+ * object list; instances themselves may be sparse.
  */
 uint32_t Schedule_Index_To_Instance(unsigned index)
 {
-    return index;
+    unsigned i;
+
+    for (i = 0; i < MAX_SCHEDULES; i++) {
+        if (Schedule_In_Use[i]) {
+            if (index == 0) {
+                return i;
+            }
+            index--;
+        }
+    }
+
+    return MAX_SCHEDULES;
 }
 
 /**
  * @brief Determines the index for a given object instance number
  * @param  instance - object-instance number of the object
  * @return index number for the given object instance number, or MAX_SCHEDULES
- * if the instance is not valid
+ * if the instance does not exist
+ *
+ * Note: this is the slot index into Schedule_Descr, not the dense object-list
+ * position returned by Schedule_Index_To_Instance().
  */
 unsigned Schedule_Instance_To_Index(uint32_t instance)
 {
     unsigned index = MAX_SCHEDULES;
 
-    if (instance < MAX_SCHEDULES) {
+    if ((instance < MAX_SCHEDULES) && Schedule_In_Use[instance]) {
         index = instance;
     }
 

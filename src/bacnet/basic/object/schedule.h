@@ -82,6 +82,12 @@ BACNET_STACK_EXPORT
 unsigned Schedule_Instance_To_Index(uint32_t instance);
 BACNET_STACK_EXPORT
 void Schedule_Init(void);
+BACNET_STACK_EXPORT
+uint32_t Schedule_Create(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Schedule_Delete(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Schedule_Cleanup(void);
 
 BACNET_STACK_EXPORT
 void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value);
