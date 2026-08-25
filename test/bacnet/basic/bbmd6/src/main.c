@@ -279,10 +279,22 @@ static void test_Execute_Virtual_Address_Resolution(void)
     count = VMAC_Count();
     for (index = 0; index < count; index++) {
         status = VMAC_Entry_By_Index(index, &test_vmac_src, NULL);
+        assert(status);
         assert(VMAC_Find_By_Key(test_vmac_src) != NULL);
     }
 
     test_cleanup();
+}
+
+static void test_BBMD_Header_BufferTooSmall(void)
+{
+    uint8_t pdu[4] = { 0 };
+    int len = 0;
+
+    len = bvlc6_encode_header(pdu, 3, BVLC6_RESULT, 9);
+    assert(len == 0);
+    len = bvlc6_encode_header(pdu, 2, BVLC6_RESULT, 9);
+    assert(len == 0);
 }
 
 static void test_BBMD_Result(void)
@@ -325,6 +337,7 @@ static void test_BBMD_Result(void)
 
 int main(void)
 {
+    test_BBMD_Header_BufferTooSmall();
     test_BBMD_Result();
     test_Execute_Virtual_Address_Resolution();
     test_Initiate_Original_Broadcast_NPDU();

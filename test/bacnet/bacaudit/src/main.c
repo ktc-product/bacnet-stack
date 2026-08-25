@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief Unit test for for BACnetAuditNotification and BACnetAuditLogRecord
+ * @brief Unit test for BACnetAuditNotification and BACnetAuditLogRecord
  * @author Steve Karg <skarg@users.sourceforge.net>
  * @date November 2024
  * @copyright SPDX-License-Identifier: MIT
@@ -232,7 +232,7 @@ static void test_bacnet_audit_log_record(void)
 
     /* record type = time-change */
     value.tag = AUDIT_LOG_DATUM_TAG_TIME_CHANGE;
-    value.log_datum.time_change = 3.14159;
+    value.log_datum.time_change = 3.14159f;
     null_len = bacnet_audit_log_record_encode(NULL, &value);
     apdu_len = bacnet_audit_log_record_encode(apdu, &value);
     zassert_equal(apdu_len, null_len, NULL);

@@ -22,6 +22,9 @@ WARNING_ALL += -Wno-sign-conversion -Wno-conversion -Wno-sign-compare
 WARNING_ALL += -Wno-long-long -Wno-attributes
 # don't warn about implicit fallthrough since it's common in network protocols
 WARNING_ALL += -Wno-implicit-fallthrough
+# don't warn about discarded qualifiers often used for initializing C strings.
+WARNING_ALL += -Wno-discarded-qualifiers
+# don't treat warnings as errors by default
 #WARNING_ALL += -Werror
 WARNINGS ?= $(WARNING_ALL)
 # dead code removal
@@ -163,7 +166,8 @@ BACNET_BASIC_SRC += \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/ucix/*.c)
 endif
 
-SRCS := $(BACNET_SRC) $(BACNET_BASIC_SRC) $(BACNET_PORT_SRC)
+# NOTE: SRCS order matters for libbacnet.a when multiple objects provide the same symbols (e.g. datetime_*). Put port sources before basic sources so the port implementation is preferred.
+SRCS := $(BACNET_SRC) $(BACNET_PORT_SRC) $(BACNET_BASIC_SRC)
 
 OBJS = ${SRCS:.c=.o}
 

@@ -656,6 +656,7 @@ void dlenv_network_port_bsc_init(uint32_t instance)
     char *hub_binding;
     char *direct_connect_initiate;
     char *direct_connect_accept_urls;
+    char *selfsigned_enabled;
     uint32_t file_instance;
     char c;
 
@@ -669,6 +670,12 @@ void dlenv_network_port_bsc_init(uint32_t instance)
     hub_binding = getenv("BACNET_SC_HUB_FUNCTION_BINDING");
     direct_connect_initiate = getenv("BACNET_SC_DIRECT_CONNECT_INITIATE");
     direct_connect_accept_urls = getenv("BACNET_SC_DIRECT_CONNECT_ACCEPT_URLS");
+    selfsigned_enabled = getenv("BACNET_SC_SELFSIGNED_ENABLED");
+    /* Local-only runtime toggle: never exposed as a Network_Port
+       property, since that would allow a remote WriteProperty to
+       weaken TLS certificate validation. */
+    c = selfsigned_enabled ? selfsigned_enabled[0] : '0';
+    bws_cli_set_selfsigned_enabled((c != '0') && (c != 'n') && (c != 'N'));
 #endif
     if (getenv("BACNET_SC_DEBUG")) {
         dlenv_debug_enable();
@@ -820,7 +827,8 @@ void dlenv_network_port_bsc_init(uint32_t instance)
 
 #if defined(BACDL_BSC)
     if (!bsc_cert_files_check(instance)) {
-        debug_printf_stderr("BSC Certificate files missing.\n");
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr, "BSC Certificate files missing.\n");
         exit(1);
     }
 #endif
@@ -859,7 +867,9 @@ static bool bsc_register_as_node(uint32_t instance, bool wait_until_connected)
     const char *failover_uri =
         Network_Port_SC_Failover_Hub_URI_char(Network_Port_Instance);
     if (primary_uri || failover_uri) {
-        debug_printf_stderr("Waiting for a BACnet/SC connection to hub...\n");
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Waiting for a BACnet/SC connection to hub...\n");
         is_connected = dlenv_hub_connection_status_check(instance);
         if (!is_connected) {
             do {
@@ -869,7 +879,8 @@ static bool bsc_register_as_node(uint32_t instance, bool wait_until_connected)
             } while (wait_until_connected && !is_connected);
         }
         if (is_connected) {
-            debug_printf_stderr("Connected to a BACnet/SC hub!\n");
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Connected to a BACnet/SC hub!\n");
         }
     } else {
         /* No primary/failover hub URI configured: registration/connection

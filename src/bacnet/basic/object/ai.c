@@ -72,9 +72,25 @@ static const int32_t Properties_Proprietary[] = { -1 };
 /* Every object shall have a Writable Property_List property
    which is a BACnetARRAY of property identifiers,
    one property identifier for each property within this object
-   that is always writable.  */
+   that is always writable.
+   Properties that are only conditionally writable, for example,
+   a Present_Value property whose writability is conditionally
+   based on the Out_Of_Service property value, shall not be included. */
 static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
+    PROP_OUT_OF_SERVICE,
+    PROP_UNITS,
+    PROP_COV_INCREMENT,
+#if defined(INTRINSIC_REPORTING)
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT,
+    PROP_DEADBAND,
+    PROP_LIMIT_ENABLE,
+    PROP_EVENT_ENABLE,
+    PROP_NOTIFY_TYPE,
+#endif
     -1
 };
 
@@ -377,6 +393,45 @@ bool Analog_Input_Event_State_Set(uint32_t object_instance, unsigned state)
 
 #if defined(INTRINSIC_REPORTING)
 /**
+ * @brief For a given object instance-number, returns the time-delay property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return time-delay property value
+ */
+uint32_t Analog_Input_Time_Delay(uint32_t object_instance)
+{
+    uint32_t time_delay = 0;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        time_delay = pObject->Time_Delay;
+    }
+
+    return time_delay;
+}
+
+/**
+ * @brief For a given object instance-number, sets the time-delay property
+ * value, and restarts the remaining time delay
+ * @param object_instance - object-instance number of the object
+ * @param time_delay - time-delay property value
+ * @return true if the time-delay property value was set
+ */
+bool Analog_Input_Time_Delay_Set(uint32_t object_instance, uint32_t time_delay)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Time_Delay = time_delay;
+        pObject->Remaining_Time_Delay = time_delay;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
  * For a given object instance-number, returns the notification_class property
  * value
  *
@@ -414,6 +469,161 @@ bool Analog_Input_Notification_Class_Set(
     if (pObject) {
         pObject->Notification_Class = notification_class;
         status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the high-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return high-limit property value
+ */
+float Analog_Input_High_Limit(uint32_t object_instance)
+{
+    float high_limit = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        high_limit = pObject->High_Limit;
+    }
+
+    return high_limit;
+}
+
+/**
+ * @brief For a given object instance-number, sets the high-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @param high_limit - high-limit property value
+ * @return true if the high-limit property value was set
+ */
+bool Analog_Input_High_Limit_Set(uint32_t object_instance, float high_limit)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->High_Limit = high_limit;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the low-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return low-limit property value
+ */
+float Analog_Input_Low_Limit(uint32_t object_instance)
+{
+    float low_limit = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        low_limit = pObject->Low_Limit;
+    }
+
+    return low_limit;
+}
+
+/**
+ * @brief For a given object instance-number, sets the low-limit property value
+ * @param object_instance - object-instance number of the object
+ * @param low_limit - low-limit property value
+ * @return true if the low-limit property value was set
+ */
+bool Analog_Input_Low_Limit_Set(uint32_t object_instance, float low_limit)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Low_Limit = low_limit;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the deadband property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return deadband property value
+ */
+float Analog_Input_Deadband(uint32_t object_instance)
+{
+    float deadband = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        deadband = pObject->Deadband;
+    }
+
+    return deadband;
+}
+
+/**
+ * @brief For a given object instance-number, sets the deadband property value
+ * @param object_instance - object-instance number of the object
+ * @param deadband - deadband property value
+ * @return true if the deadband property value was set
+ */
+bool Analog_Input_Deadband_Set(uint32_t object_instance, float deadband)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Deadband = deadband;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the limit_enable property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return limit_enable property value
+ */
+BACNET_LIMIT_ENABLE Analog_Input_Limit_Enable(uint32_t object_instance)
+{
+    uint32_t limit_enable = 0;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        limit_enable = pObject->Limit_Enable;
+    }
+
+    return limit_enable;
+}
+
+/**
+ * @brief For a given object instance-number, sets the limit_enable property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @param limit_enable - limit_enable property value - the combination of bits:
+ *                       EVENT_LOW_LIMIT_ENABLE, EVENT_HIGH_LIMIT_ENABLE
+ * @return true if the limit_enable property value was set
+ */
+bool Analog_Input_Limit_Enable_Set(
+    uint32_t object_instance, BACNET_LIMIT_ENABLE limit_enable)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        if (!(limit_enable &
+              ~(EVENT_LOW_LIMIT_ENABLE | EVENT_HIGH_LIMIT_ENABLE))) {
+            pObject->Limit_Enable = limit_enable;
+            status = true;
+        }
     }
 
     return status;
@@ -1016,7 +1226,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     uint8_t *apdu = NULL;
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
-    float real_value = (float)1.414;
+    float real_value = 1.414f;
     bool state = false;
 #if defined(INTRINSIC_REPORTING)
     int apdu_size = 0;
@@ -1422,7 +1632,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         CurrentAI->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = CurrentAI->Ack_notify_data.EventState;
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Analog-Input[%d]: Send AckNotification.\n", object_instance);
         msgText = "AckNotification";
         /* Notify Type */
@@ -1606,7 +1817,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
                     ExceededLimit = 0;
                     break;
             } /* switch (ToState) */
-            debug_printf(
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr,
                 "Analog-Input[%d]: Event_State goes from %s to %s.\n",
                 object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
@@ -1758,7 +1970,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
             }
         }
         /* add data from notification class */
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Analog-Input[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
@@ -1774,7 +1987,9 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
-            debug_printf("Analog-Input[%d]: Ack Required!\n", object_instance);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Analog-Input[%d]: Ack Required!\n",
+                object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                 case EVENT_STATE_HIGH_LIMIT:
@@ -2105,9 +2320,9 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
             pObject->Object_Name = NULL;
             pObject->Description = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
-            pObject->COV_Increment = 1.0;
+            pObject->COV_Increment = 1.0f;
             pObject->Present_Value = 0.0f;
-            pObject->Prior_Value = 0.0;
+            pObject->Prior_Value = 0.0f;
             pObject->Units = UNITS_PERCENT;
             pObject->Out_Of_Service = false;
             pObject->Changed = false;

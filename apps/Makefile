@@ -188,14 +188,22 @@ DEBUGGING ?=
 # enable all relevant warnings that find bugs
 WARNING_ALL := -Wall -Wextra -pedantic
 WARNING_ALL += -Wfloat-equal -Wconversion
-WARNING_ALL += -Wredundant-decls -Wswitch-default
+WARNING_ALL += -Wfloat-conversion -Wdouble-promotion
+WARNING_ALL += -Wredundant-decls -Wmissing-declarations
+WARNING_ALL += -Wswitch-default
 WARNING_ALL += -Wunused-variable
+WARNING_ALL += -Wcast-qual
+WARNING_ALL += -Wwrite-strings
 # don't warn about conversion, sign, compares, long long and attributes
 # since they are common in embedded
-WARNING_ALL += -Wno-sign-conversion -Wno-conversion -Wno-sign-compare
-WARNING_ALL += -Wno-long-long -Wno-attributes
+WARNING_ALL += -Wno-sign-conversion -Wno-conversion
+WARNING_ALL += -Wno-sign-compare
 # don't warn about implicit fallthrough since it's common in network protocols
 WARNING_ALL += -Wno-implicit-fallthrough
+WARNING_ALL += -Wno-long-long -Wno-attributes
+# don't warn about discarded qualifiers often used for initializing C strings.
+WARNING_ALL += -Wno-discarded-qualifiers
+# don't treat warnings as errors by default
 #WARNING_ALL += -Werror
 WARNINGS ?= $(WARNING_ALL)
 # dead code removal
@@ -267,7 +275,7 @@ SUBDIRS = lib readprop writeprop readfile writefile reinit server dcc \
 	whohas whois iam ucov scov timesync epics readpropm readrange \
 	writepropm uptransfer getevent uevent abort error event ack-alarm \
 	server-client add-list-element remove-list-element create-object \
-	who-am-i you-are apdu writegroup dmbrcap \
+	who-am-i you-are apdu writegroup dmbrcap ptransfer \
 	delete-object server-discover server-basic server-mini \
 	modbus-gateway
 
@@ -280,7 +288,7 @@ endif
 
 ifeq (${BACNET_PORT},linux)
 ifneq (${OSTYPE},cygwin)
-SUBDIRS += mstpcap mstpcrc
+SUBDIRS += mstpcap mstpcrc mstpsnap
 endif
 endif
 
@@ -417,6 +425,10 @@ mstpcap:
 
 .PHONY: mstpcrc
 mstpcrc:
+	$(MAKE) -B -C $@
+
+.PHONY: mstpsnap
+mstpsnap:
 	$(MAKE) -B -C $@
 
 .PHONY: piface

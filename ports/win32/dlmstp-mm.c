@@ -19,6 +19,7 @@
 #include "bacnet/datalink/mstp.h"
 #include "bacnet/datalink/dlmstp.h"
 #include "bacnet/npdu.h"
+#include "bacnet/basic/sys/compare.h"
 /* port specific */
 #include "rs485.h"
 
@@ -461,7 +462,7 @@ void dlmstp_get_broadcast_address(BACNET_ADDRESS *dest)
     return;
 }
 
-bool dlmstp_init(char *ifname)
+bool dlmstp_init(const char *ifname)
 {
     unsigned long hThread = 0;
     uint32_t arg_value = 0;
@@ -533,7 +534,8 @@ bool dlmstp_init(char *ifname)
     if (timeGetDevCaps(&tc, sizeof(TIMECAPS)) != TIMERR_NOERROR) {
         fprintf(stderr, "Failed to set timer resolution\n");
     }
-    TimeBeginPeriod = min(max(tc.wPeriodMin, TARGET_RESOLUTION), tc.wPeriodMax);
+    TimeBeginPeriod =
+        BACNET_CLAMP(tc.wPeriodMin, TARGET_RESOLUTION, tc.wPeriodMax);
     timeBeginPeriod(TimeBeginPeriod);
 
     /* start the threads */
@@ -576,7 +578,7 @@ uint32_t timestamp_ms(void)
     return delta_ticks;
 }
 
-static char *Network_Interface = "COM3";
+static const char *Network_Interface = "COM3";
 
 int main(int argc, char *argv[])
 {

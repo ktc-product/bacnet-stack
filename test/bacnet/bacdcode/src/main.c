@@ -1178,6 +1178,33 @@ static void testBACDCodeOctetString(void)
         len = bacnet_octet_string_application_encode(apdu, apdu_len, &value);
         zassert_equal(len, 0, NULL);
     }
+    /* direct coverage of bacnet_octet_string_decode() */
+    {
+        uint8_t buf[MAX_OCTET_STRING_BYTES + 8] = { 0 };
+        BACNET_OCTET_STRING decoded_value = { 0 };
+
+        for (i = 0; i < 8; i++) {
+            buf[i] = (uint8_t)i;
+        }
+        /* value NULL - length only mode, no dereference of value */
+        len = bacnet_octet_string_decode(buf, sizeof(buf), 8, NULL);
+        zassert_equal(len, 8, NULL);
+        /* value non-NULL, zero length */
+        len = bacnet_octet_string_decode(buf, sizeof(buf), 0, &decoded_value);
+        zassert_equal(len, 0, NULL);
+        /* value non-NULL, within capacity */
+        len = bacnet_octet_string_decode(buf, sizeof(buf), 8, &decoded_value);
+        zassert_equal(len, 8, NULL);
+        zassert_equal(octetstring_length(&decoded_value), 8, NULL);
+        /* len_value exceeds apdu_size - error */
+        len = bacnet_octet_string_decode(buf, 4, 8, &decoded_value);
+        zassert_equal(len, BACNET_STATUS_ERROR, NULL);
+        /* len_value exceeds octet string capacity - octetstring_init()
+         * fails and the error is now propagated */
+        len = bacnet_octet_string_decode(
+            buf, sizeof(buf), MAX_OCTET_STRING_BYTES + 1, &decoded_value);
+        zassert_equal(len, BACNET_STATUS_ERROR, NULL);
+    }
 
     return;
 }
@@ -1269,6 +1296,40 @@ static void testBACDCodeCharacterString(void)
     while (--apdu_len) {
         len =
             bacnet_character_string_application_encode(apdu, apdu_len, &value);
+        zassert_equal(len, 0, NULL);
+    }
+    /* direct coverage of bacnet_character_string_decode() */
+    {
+        uint8_t buf[MAX_CHARACTER_STRING_BYTES + 8] = { 0 };
+        BACNET_CHARACTER_STRING decoded_value = { 0 };
+
+        buf[0] = CHARACTER_ANSI_X34;
+        for (i = 1; i < 8; i++) {
+            buf[i] = 'A' + i;
+        }
+        /* char_string NULL - length only mode, no dereference of
+         * char_string */
+        len = bacnet_character_string_decode(buf, sizeof(buf), 8, NULL);
+        zassert_equal(len, 8, NULL);
+        /* char_string non-NULL, encoding byte only */
+        len =
+            bacnet_character_string_decode(buf, sizeof(buf), 1, &decoded_value);
+        zassert_equal(len, 1, NULL);
+        /* char_string non-NULL, within capacity */
+        len =
+            bacnet_character_string_decode(buf, sizeof(buf), 8, &decoded_value);
+        zassert_equal(len, 8, NULL);
+        /* len_value exceeds apdu_size - error */
+        len = bacnet_character_string_decode(buf, 4, 8, &decoded_value);
+        zassert_equal(len, 0, NULL);
+        /* len_value of zero - nothing to decode */
+        len =
+            bacnet_character_string_decode(buf, sizeof(buf), 0, &decoded_value);
+        zassert_equal(len, 0, NULL);
+        /* len_value exceeds character string capacity -
+         * characterstring_init() fails and the error is now propagated */
+        len = bacnet_character_string_decode(
+            buf, sizeof(buf), MAX_CHARACTER_STRING_BYTES + 1, &decoded_value);
         zassert_equal(len, 0, NULL);
     }
 
@@ -2299,7 +2360,7 @@ ZTEST(bacdcode_tests, test_bacnet_enclosed_data_length)
 static void test_bacnet_enclosed_data_length(void)
 #endif
 {
-    uint8_t apdu[480] = { 0 };
+    uint8_t apdu[1024] = { 0 };
     int apdu_len = 0, len = 0, test_len = 0;
     unsigned bit_i;
     uint8_t tag_number;
@@ -2346,6 +2407,48 @@ static void test_bacnet_enclosed_data_length(void)
         test_len = bacnet_enclosed_data_length(apdu, apdu_len);
         zassert_equal(test_len, BACNET_STATUS_ERROR, NULL);
     }
+
+    /* overflow regression: 256 nested same-tag openings must not wrap */
+    tag_number = BIT(0);
+    apdu_len = 0;
+    for (bit_i = 0; bit_i < 256; bit_i++) {
+        len = encode_opening_tag(&apdu[apdu_len], tag_number);
+        apdu_len += len;
+    }
+    for (bit_i = 0; bit_i < 256; bit_i++) {
+        len = encode_closing_tag(&apdu[apdu_len], tag_number);
+        apdu_len += len;
+    }
+    test_len = bacnet_enclosed_data_length(apdu, apdu_len);
+    zassert_equal(
+        test_len, apdu_len - 2, "test_len=%d apdu_len=%d", test_len, apdu_len);
+
+    /* overflow regression: a tag whose extended length value approaches
+       INT_MAX must be rejected, not summed into the running lengths. The
+       guard bounds each addend, so the SUM is what overflows: len already
+       holds this tag's header size when the data length is added to it, and
+       apdu_len already holds the opening tag when len is added to it. */
+    apdu_len = 0;
+    apdu_len += encode_opening_tag(&apdu[apdu_len], 0);
+    apdu_len += encode_tag(&apdu[apdu_len], 2, false, INT_MAX);
+    apdu_len += encode_closing_tag(&apdu[apdu_len], 0);
+    test_len = bacnet_enclosed_data_length(apdu, apdu_len);
+    zassert_equal(test_len, BACNET_STATUS_ERROR, "test_len=%d", test_len);
+    /* the same, context tagged */
+    apdu_len = 0;
+    apdu_len += encode_opening_tag(&apdu[apdu_len], 0);
+    apdu_len += encode_tag(&apdu[apdu_len], 1, true, INT_MAX);
+    apdu_len += encode_closing_tag(&apdu[apdu_len], 0);
+    test_len = bacnet_enclosed_data_length(apdu, apdu_len);
+    zassert_equal(test_len, BACNET_STATUS_ERROR, "test_len=%d", test_len);
+    /* INT_MAX less the 6-octet tag header: the data length fits into len
+       exactly, and it is the enclosing apdu_len that would overflow */
+    apdu_len = 0;
+    apdu_len += encode_opening_tag(&apdu[apdu_len], 0);
+    apdu_len += encode_tag(&apdu[apdu_len], 2, false, INT_MAX - 6);
+    apdu_len += encode_closing_tag(&apdu[apdu_len], 0);
+    test_len = bacnet_enclosed_data_length(apdu, apdu_len);
+    zassert_equal(test_len, BACNET_STATUS_ERROR, "test_len=%d", test_len);
 }
 
 #if defined(CONFIG_ZTEST_NEW_API)
@@ -2491,6 +2594,84 @@ static void test_bacnet_character_string_buffer(void)
 }
 
 #if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(bacdcode_tests, test_bacnet_character_string_ansi)
+#else
+static void test_bacnet_character_string_ansi(void)
+#endif
+{
+    uint8_t apdu[64] = { 0 };
+    BACNET_CHARACTER_STRING_ANSI value = { 0 };
+    char buffer[32] = { 0 };
+    char unpack_buffer[32] = { 0 };
+    BACNET_TAG tag = { 0 };
+    uint8_t tag_number = 7;
+    uint8_t encoding = 0;
+    int len = 0, null_len = 0;
+    size_t value_len = 0;
+
+    strcpy(buffer, "Hello BACnet");
+    bacnet_character_string_ansi_init(&value, buffer, false);
+
+    len = encode_bacnet_character_string_ansi(apdu, &value);
+    null_len = encode_bacnet_character_string_ansi(NULL, &value);
+    zassert_equal(len, null_len, NULL);
+    zassert_equal(len, 1 + strlen(buffer), NULL);
+    zassert_equal(apdu[0], CHARACTER_ANSI_X34, NULL);
+    zassert_equal(memcmp(&apdu[1], buffer, strlen(buffer)), 0, NULL);
+
+    value_len = bacnet_character_string_ansi_strncpy(
+        &value, &encoding, unpack_buffer, sizeof(unpack_buffer));
+    zassert_equal(value_len, strlen(buffer), NULL);
+    zassert_equal(encoding, CHARACTER_ANSI_X34, NULL);
+    zassert_equal(memcmp(unpack_buffer, buffer, value_len), 0, NULL);
+
+    struct {
+        char buffer[8];
+        char guard[4];
+    } overflow = {
+        .buffer = { 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X' },
+        .guard = { 'G', 'H', 'I', 'J' },
+    };
+    char overflow_string[] = "Hello BACnet!";
+    BACNET_CHARACTER_STRING_ANSI overflow_value = {
+        .buffer = overflow_string,
+        .buffer_allocated = false,
+    };
+
+    value_len = bacnet_character_string_ansi_strncpy(
+        &overflow_value, &encoding, overflow.buffer, sizeof(overflow.buffer));
+    zassert_equal(value_len, sizeof(overflow.buffer) - 1, NULL);
+    zassert_equal(encoding, CHARACTER_ANSI_X34, NULL);
+    zassert_equal(overflow.buffer[sizeof(overflow.buffer) - 1], '\0', NULL);
+    zassert_equal(memcmp(overflow.buffer, overflow_string, value_len), 0, NULL);
+    zassert_equal(overflow.guard[0], 'G', NULL);
+    zassert_equal(overflow.guard[1], 'H', NULL);
+    zassert_equal(overflow.guard[2], 'I', NULL);
+    zassert_equal(overflow.guard[3], 'J', NULL);
+
+    len = bacnet_character_string_ansi_application_encode(
+        apdu, sizeof(apdu), &value);
+    null_len = bacnet_character_string_ansi_application_encode(
+        NULL, sizeof(apdu), &value);
+    zassert_equal(len, null_len, NULL);
+    zassert_true(len > 0, NULL);
+    zassert_true(bacnet_tag_decode(apdu, len, &tag) > 0, NULL);
+    zassert_equal(tag.number, BACNET_APPLICATION_TAG_CHARACTER_STRING, NULL);
+    zassert_true(tag.application, NULL);
+
+    len = bacnet_character_string_ansi_context_encode(
+        apdu, sizeof(apdu), tag_number, &value);
+    null_len = bacnet_character_string_ansi_context_encode(
+        NULL, sizeof(apdu), tag_number, &value);
+    zassert_equal(len, null_len, NULL);
+    zassert_true(len > 0, NULL);
+    zassert_true(bacnet_tag_decode(apdu, len, &tag) > 0, NULL);
+    zassert_equal(tag.number, tag_number, NULL);
+    zassert_true(tag.context, NULL);
+    zassert_false(tag.application, NULL);
+}
+
+#if defined(CONFIG_ZTEST_NEW_API)
 ZTEST(bacdcode_tests, test_bacnet_constructed_value)
 #else
 static void test_bacnet_constructed_value(void)
@@ -2583,6 +2764,7 @@ void test_main(void)
         ztest_unit_test(test_bacnet_enclosed_data_length),
         ztest_unit_test(test_octet_string_buffer),
         ztest_unit_test(test_bacnet_character_string_buffer),
+        ztest_unit_test(test_bacnet_character_string_ansi),
         ztest_unit_test(test_bacnet_constructed_value),
         ztest_unit_test(test_simple_ack));
 

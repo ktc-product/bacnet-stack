@@ -3583,7 +3583,7 @@ uint32_t Network_Port_IP_DHCP_Lease_Time_Remaining(uint32_t object_instance)
 }
 
 /**
- * @brief Get the the address of the DHCP server from which the last DHCP
+ * @brief Get the address of the DHCP server from which the last DHCP
  *  lease was obtained for the port. If the address of the DHCP server
  *  cannot be determined, the value of this property shall be X'00000000'.
  * @param object_instance [in] BACnet network port object instance number
@@ -4410,8 +4410,8 @@ int Network_Port_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 Network_Port_SC_Hub_Connector_State(rpdata->object_instance));
             break;
         case PROP_OPERATIONAL_CERTIFICATE_FILE:
-            apdu_len = encode_application_unsigned(
-                &apdu[0],
+            apdu_len = encode_application_object_id(
+                &apdu[0], OBJECT_FILE,
                 Network_Port_Operational_Certificate_File(
                     rpdata->object_instance));
             break;
@@ -4429,8 +4429,8 @@ int Network_Port_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             }
             break;
         case PROP_CERTIFICATE_SIGNING_REQUEST_FILE:
-            apdu_len = encode_application_unsigned(
-                &apdu[0],
+            apdu_len = encode_application_object_id(
+                &apdu[0], OBJECT_FILE,
                 Network_Port_Certificate_Signing_Request_File(
                     rpdata->object_instance));
             break;
@@ -4856,6 +4856,7 @@ void Network_Port_Cleanup(void)
         for (index = 0; index < BACNET_NETWORK_PORTS_MAX; index++) {
             BACNET_SC_PARAMS *sc = &Object_List[index].Network.BSC.Parameters;
             if (sc->Routing_Table) {
+                Keylist_Data_Free(sc->Routing_Table);
                 Keylist_Delete(sc->Routing_Table);
                 sc->Routing_Table = NULL;
             }

@@ -38,6 +38,8 @@
 #include "bacnet/basic/object/ai.h"
 #include "bacnet/basic/object/ao.h"
 #include "bacnet/basic/object/av.h"
+#include "bacnet/basic/object/alert_enrollment.h"
+#include "bacnet/basic/object/averaging.h"
 #include "bacnet/basic/object/auditlog.h"
 #include "bacnet/basic/object/bi.h"
 #include "bacnet/basic/object/bo.h"
@@ -219,6 +221,27 @@ static object_functions_t Default_Object_Table[] = {
       Analog_Value_Delete,
       NULL /* Timer */,
       Analog_Value_Writable_Property_List },
+    { OBJECT_AVERAGING,
+      Averaging_Init,
+      Averaging_Count,
+      Averaging_Index_To_Instance,
+      Averaging_Valid_Instance,
+      Averaging_Object_Name,
+      Averaging_Read_Property,
+      Averaging_Write_Property,
+      Averaging_Property_Lists,
+      NULL /* ReadRangeInfo */,
+      NULL /* Iterator */,
+      NULL /* Value_Lists */,
+      NULL /* COV */,
+      NULL /* COV Clear */,
+      NULL /* Intrinsic Reporting */,
+      NULL /* Add_List_Element */,
+      NULL /* Remove_List_Element */,
+      Averaging_Create,
+      Averaging_Delete,
+      Averaging_Timer,
+      Averaging_Writable_Property_List },
     { OBJECT_BINARY_INPUT,
       Binary_Input_Init,
       Binary_Input_Count,
@@ -448,9 +471,9 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Intrinsic Reporting */,
       NULL /* Add_List_Element */,
       NULL /* Remove_List_Element */,
-      NULL /* Create */,
-      NULL /* Delete */,
-      NULL /* Timer */,
+      Command_Create,
+      Command_Delete,
+      Command_Timer,
       Command_Writable_Property_List },
 #if defined(INTRINSIC_REPORTING)
     { OBJECT_NOTIFICATION_CLASS,
@@ -807,9 +830,9 @@ static object_functions_t Default_Object_Table[] = {
       Accumulator_Property_Lists,
       NULL /* ReadRangeInfo */,
       NULL /* Iterator */,
-      NULL /* Value_Lists */,
-      NULL /* COV */,
-      NULL /* COV Clear */,
+      Accumulator_Encode_Value_List,
+      Accumulator_Change_Of_Value,
+      Accumulator_Change_Of_Value_Clear,
       NULL /* Intrinsic Reporting */,
       NULL /* Add_List_Element */,
       NULL /* Remove_List_Element */,
@@ -1031,6 +1054,29 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Timer */,
       Audit_Log_Writable_Property_List },
 #endif
+#if BACNET_EVENT_EXTENDED_ENABLED && defined(INTRINSIC_REPORTING)
+    { OBJECT_ALERT_ENROLLMENT,
+      Alert_Enrollment_Init,
+      Alert_Enrollment_Count,
+      Alert_Enrollment_Index_To_Instance,
+      Alert_Enrollment_Valid_Instance,
+      Alert_Enrollment_Object_Name,
+      Alert_Enrollment_Read_Property,
+      Alert_Enrollment_Write_Property,
+      Alert_Enrollment_Property_Lists,
+      NULL /* ReadRangeInfo */,
+      NULL /* Iterator */,
+      NULL /* Value_Lists */,
+      NULL /* COV */,
+      NULL /* COV Clear */,
+      Alert_Enrollment_Intrinsic_Reporting,
+      NULL /* Add_List_Element */,
+      NULL /* Remove_List_Element */,
+      Alert_Enrollment_Create,
+      Alert_Enrollment_Delete,
+      NULL /* Timer */,
+      Alert_Enrollment_Writable_Property_List },
+#endif
     { /** @note The array of object functions must be terminated
        *  with an entry with an Object_Type of MAX_BACNET_OBJECT_TYPE
        *  or greater, which will signal the end of the array.
@@ -1101,7 +1147,7 @@ void Device_Write_Property_Proprietary_Callback_Set(write_property_function cb)
  * @return true if the property is a member of the proprietary property list,
  *  false otherwise.
  */
-bool Device_Property_Proprietary_Member(
+static bool Device_Property_Proprietary_Member(
     BACNET_OBJECT_TYPE object_type,
     uint32_t object_instance,
     BACNET_PROPERTY_ID object_property)
@@ -2024,9 +2070,9 @@ bool Device_Object_Name_ANSI_Init(const char *value)
  * @brief Get the Device Object Name as a C string
  * @return The object name as a null-terminated string
  */
-char *Device_Object_Name_ANSI(void)
+const char *Device_Object_Name_ANSI(void)
 {
-    return (char *)characterstring_value(&My_Object_Name);
+    return characterstring_value(&My_Object_Name);
 }
 
 /**
@@ -2764,6 +2810,7 @@ bool Device_Is_Configuration_File(uint32_t instance)
     return status;
 }
 
+#if defined(BACNET_BACKUP_RESTORE)
 /**
  * @brief Encode a BACnetARRAY property element
  * @param object_instance [in] BACnet network port object instance number
@@ -2774,11 +2821,10 @@ bool Device_Is_Configuration_File(uint32_t instance)
  * @return The length of the apdu encoded or
  *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-int Device_Configuration_File_Encode(
+static int Device_Configuration_File_Encode(
     uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu)
 {
     int apdu_len = BACNET_STATUS_ERROR;
-#if defined(BACNET_BACKUP_RESTORE)
     uint32_t *configuration_files;
 
     configuration_files = Device_Configuration_Files_Value();
@@ -2786,16 +2832,11 @@ int Device_Configuration_File_Encode(
         apdu_len = encode_application_object_id(
             apdu, OBJECT_FILE, configuration_files[array_index]);
     }
-#else
-    (void)array_index;
-    (void)apdu;
-#endif
     (void)object_instance;
 
     return apdu_len;
 }
 
-#if defined(BACNET_BACKUP_RESTORE)
 /**
  * @brief Decode a BACnetLIST property element to determine the element length
  * @param object_instance [in] BACnet object instance number
@@ -4398,10 +4439,14 @@ void Device_Init(object_functions_t *object_table)
     /* link ReadProperty and WriteProperty to Loop object for references */
     Loop_Read_Property_Internal_Callback_Set(Device_Read_Property);
     Loop_Write_Property_Internal_Callback_Set(Device_Write_Property);
+    /* link ReadProperty to Averaging object for sampled references */
+    Averaging_Read_Property_Internal_Callback_Set(Device_Read_Property);
 #if (BACNET_PROTOCOL_REVISION >= 17)
     /* link WriteProperty to Timer object for references */
     Timer_Write_Property_Internal_Callback_Set(Device_Write_Property);
 #endif
+    /* link WriteProperty to Command object for action execution */
+    Command_Write_Property_Internal_Callback_Set(Device_Write_Property);
     Reinitialize_Data.State = BACNET_REINIT_IDLE;
     Reinitialize_Data.Password = "filister";
 }

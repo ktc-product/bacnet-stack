@@ -184,11 +184,12 @@ set(BACNET_PROJECT_SOURCE
     ${LIBRARY_BACNET_BASIC}/service/h_noserv.c
     ${LIBRARY_BACNET_BASIC}/service/s_iam.c
     ${LIBRARY_BACNET_BASIC}/service/s_ihave.c
+    ${LIBRARY_BACNET_BASIC}/service/s_upt.c
     ${LIBRARY_BACNET_BASIC}/service/h_arf.c
     ${LIBRARY_BACNET_BASIC}/tsm/tsm.c
     ${LIBRARY_BACNET_BASIC}/sys/bsramfs.c
+    ${LIBRARY_BACNET_BASIC}/datetime/datetime_mstimer.c
     ${LIBRARY_BACNET_BASIC}/sys/debug.c
-    ${LIBRARY_BACNET_BASIC}/sys/datetime_mstimer.c
     ${LIBRARY_BACNET_BASIC}/sys/days.c
     ${LIBRARY_BACNET_BASIC}/sys/dst.c
     ${LIBRARY_BACNET_BASIC}/sys/ringbuf.c
@@ -224,6 +225,7 @@ set(BACNET_PROJECT_SOURCE
     ${LIBRARY_BACNET_CORE}/memcopy.c
     ${LIBRARY_BACNET_CORE}/npdu.c
     ${LIBRARY_BACNET_CORE}/proplist.c
+    ${LIBRARY_BACNET_CORE}/ptransfer.c
     ${LIBRARY_BACNET_CORE}/rd.c
     ${LIBRARY_BACNET_CORE}/reject.c
     ${LIBRARY_BACNET_CORE}/rp.c
@@ -256,6 +258,7 @@ target_compile_definitions(${EXECUTABLE} PRIVATE
     -DUSE_STDPERIPH_DRIVER
     -DSTM32F4XX
     -DBACDL_MSTP
+    # note: MS/TP extended frames can be up to MAX_APDU=1476 bytes
     -DMAX_APDU=480
     -DBIG_ENDIAN=0
     -DMAX_TSM_TRANSACTIONS=1
@@ -276,14 +279,16 @@ target_compile_options(${EXECUTABLE} PRIVATE
     -Wno-attributes
     # don't warn about implicit fallthrough since it is common in network protocols
     -Wno-implicit-fallthrough
+    # don't warn about discarded qualifiers often used for initializing C strings.
+    -Wno-discarded-qualifiers
     # the SDK does not meet coding guidelines
     -Wno-comment
     -Wno-missing-braces
     -Wno-unused-variable
-    # reference the linker file for CSTACK size
-    -Wstack-usage=16384
     -Wno-unused-parameter
     -Wno-char-subscripts
+    # reference the linker file for CSTACK size
+    -Wstack-usage=16384
 )
 
 target_include_directories(${EXECUTABLE} PRIVATE

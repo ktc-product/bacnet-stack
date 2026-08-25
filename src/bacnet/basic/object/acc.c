@@ -13,6 +13,7 @@
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
+#include "bacnet/cov.h"
 #include "bacnet/proplist.h"
 #include "bacnet/rp.h"
 #include "bacnet/wp.h"
@@ -34,12 +35,14 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ACCUMULATOR;
 
 struct object_data {
     BACNET_UNSIGNED_INTEGER Present_Value;
+    BACNET_UNSIGNED_INTEGER Prior_Value;
     BACNET_UNSIGNED_INTEGER Max_Pres_Value;
     BACNET_CHARACTER_STRING Object_Name;
     const char *Description;
     BACNET_ENGINEERING_UNITS Units;
     int32_t Scale;
     bool Out_Of_Service : 1;
+    bool Changed : 1;
     void *Context;
 };
 
@@ -187,6 +190,45 @@ unsigned Accumulator_Instance_To_Index(uint32_t object_instance)
 }
 
 /**
+ * For a given object instance-number, returns the object-name
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return object-name C string, or NULL if not found.
+ */
+char *Accumulator_Name(uint32_t object_instance)
+{
+    char *name = NULL;
+    struct object_data *pObject = Object_Data(object_instance);
+
+    if (pObject) {
+        name = characterstring_value(&pObject->Object_Name);
+    }
+
+    return name;
+}
+
+/**
+ * For a given object instance-number, sets the object-name from a C string
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Accumulator_Name_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject = Object_Data(object_instance);
+
+    if (pObject) {
+        status = characterstring_init_ansi(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
  * For a given object instance-number, loads the object-name into
  * a characterstring. Note that the object name must be unique
  * within this device.
@@ -252,6 +294,27 @@ BACNET_UNSIGNED_INTEGER Accumulator_Present_Value(uint32_t object_instance)
 }
 
 /**
+ * This function is used to detect a value change,
+ * using the new value compared against the prior
+ * value.
+ *
+ * This method will update the COV-changed attribute.
+ *
+ * @param pObject  Object instance
+ * @param value  Given present value.
+ */
+static void Accumulator_Present_Value_COV_Detect(
+    struct object_data *pObject, BACNET_UNSIGNED_INTEGER value)
+{
+    if (pObject) {
+        if (pObject->Prior_Value != value) {
+            pObject->Changed = true;
+            pObject->Prior_Value = value;
+        }
+    }
+}
+
+/**
  * For a given object instance-number, sets the present-value
  *
  * @param  object_instance - object-instance number of the object
@@ -266,8 +329,67 @@ bool Accumulator_Present_Value_Set(
     struct object_data *pObject = Object_Data(object_instance);
 
     if (pObject) {
+        Accumulator_Present_Value_COV_Detect(pObject, value);
         pObject->Present_Value = value;
         status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, determines the COV status
+ * @param  object_instance - object-instance number of the object
+ * @return  true if the COV flag is set
+ */
+bool Accumulator_Change_Of_Value(uint32_t object_instance)
+{
+    bool changed = false;
+    struct object_data *pObject = Object_Data(object_instance);
+
+    if (pObject) {
+        changed = pObject->Changed;
+    }
+
+    return changed;
+}
+
+/**
+ * @brief For a given object instance-number, clears the COV flag
+ * @param  object_instance - object-instance number of the object
+ */
+void Accumulator_Change_Of_Value_Clear(uint32_t object_instance)
+{
+    struct object_data *pObject = Object_Data(object_instance);
+
+    if (pObject) {
+        pObject->Changed = false;
+    }
+}
+
+/**
+ * For a given object instance-number, loads the value_list with the COV data.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value_list - list of COV data
+ *
+ * @return  true if the value list is encoded
+ */
+bool Accumulator_Encode_Value_List(
+    uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
+{
+    bool status = false;
+    struct object_data *pObject = Object_Data(object_instance);
+
+    if (pObject) {
+        const bool in_alarm = false;
+        const bool fault = false;
+        const bool overridden = false;
+        bool out_of_service = pObject->Out_Of_Service;
+
+        status = cov_value_list_encode_unsigned(
+            value_list, pObject->Present_Value, in_alarm, fault, overridden,
+            out_of_service);
     }
 
     return status;
@@ -470,6 +592,9 @@ bool Accumulator_Out_Of_Service_Set(uint32_t object_instance, bool value)
     struct object_data *pObject = Object_Data(object_instance);
 
     if (pObject) {
+        if (pObject->Out_Of_Service != value) {
+            pObject->Changed = true;
+        }
         pObject->Out_Of_Service = value;
         status = true;
     }
@@ -753,6 +878,8 @@ uint32_t Accumulator_Create(uint32_t object_instance)
                     (unsigned long)object_instance));
             pObject->Description = "";
             pObject->Present_Value = 0;
+            pObject->Prior_Value = 0;
+            pObject->Changed = false;
             pObject->Units = UNITS_WATT_HOURS;
             pObject->Scale = 1;
             pObject->Max_Pres_Value = BACNET_UNSIGNED_INTEGER_MAX;
