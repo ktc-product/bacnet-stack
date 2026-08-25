@@ -425,16 +425,6 @@ unsigned Analog_Value_Event_State(uint32_t object_instance)
     return state;
 }
 
-bool Analog_Value_Event_State_Set(uint32_t object_instance, unsigned state)
-{
-    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
-    if (!pObject) {
-        return false;
-    }
-    pObject->Event_State = state;
-    return true;
-}
-
 /**
  * @brief For a given object instance-number, sets the event-state property
  * value
@@ -452,44 +442,6 @@ bool Analog_Value_Event_State_Set(uint32_t object_instance, unsigned state)
         pObject->Event_State = state;
         status = true;
     }
-
-    return status;
-}
-
-bool Analog_Value_Notification_Class_Set(
-    uint32_t object_instance, uint32_t notification_class)
-{
-    bool status = false;
-#if defined(INTRINSIC_REPORTING)
-    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
-
-    if (pObject) {
-        pObject->Notification_Class = notification_class;
-        status = true;
-    }
-#else
-    (void)object_instance;
-    (void)notification_class;
-#endif
-
-    return status;
-}
-
-bool Analog_Value_Event_Enable_Set(
-    uint32_t object_instance, BACNET_EVENT_ENABLE event_enable)
-{
-    bool status = false;
-#if defined(INTRINSIC_REPORTING)
-    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
-
-    if (pObject) {
-        pObject->Event_Enable = event_enable;
-        status = true;
-    }
-#else
-    (void)object_instance;
-    (void)event_enable;
-#endif
 
     return status;
 }
