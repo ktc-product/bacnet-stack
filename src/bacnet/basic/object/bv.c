@@ -57,6 +57,8 @@ struct object_data {
     /* AckNotification information */
     ACK_NOTIFICATION Ack_notify_data;
     BACNET_BINARY_PV Alarm_Value;
+    /* custom message text per transition, NULL = stack default text */
+    const char *Event_Message_Texts_Custom[MAX_BACNET_EVENT_TRANSITION];
 #endif
 };
 /* Key List for storing the object data sorted by instance number  */
@@ -1274,6 +1276,7 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
             for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
                 datetime_wildcard_set(&pObject->Event_Time_Stamps[j]);
                 pObject->Acked_Transitions[j].bIsAcked = true;
+                pObject->Event_Message_Texts_Custom[j] = NULL;
             }
 
             /* Set handler for GetEventInformation function */
@@ -1559,6 +1562,31 @@ bool Binary_Value_Notify_Type_Set(
             pObject->Notify_Type = notify_type;
             status = true;
         }
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number and event transition, sets the
+ * custom event message text
+ * NOTE: the default message text is used on event if custom_text is NULL
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @param  custom_text - message text; the pointer is kept, not the text
+ * @return  true if custom event message text was set
+ */
+bool Binary_Value_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text)
+{
+    bool status = false;
+    struct object_data *pObject = Binary_Value_Object(object_instance);
+
+    if (pObject && (transition < MAX_BACNET_EVENT_TRANSITION)) {
+        pObject->Event_Message_Texts_Custom[transition] = custom_text;
+        status = true;
     }
 
     return status;
@@ -1921,6 +1949,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
     uint8_t ToState = 0;
     BACNET_BINARY_PV PresentVal = BINARY_INACTIVE;
     bool SendNotify = false;
+    bool NotifyEnabled = true;
     struct object_data *pObject = Binary_Value_Object(object_instance);
 
     if (!pObject) {
@@ -1958,9 +1987,9 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                        pTimeDelay, then indicate a transition to the OFFNORMAL
                    event state.
                 */
-                if ((PresentVal == pObject->Alarm_Value) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                     EVENT_ENABLE_TO_OFFNORMAL)) {
+                /* Event_Enable only suppresses the notification (see below),
+                   the event state still follows the value. */
+                if (PresentVal == pObject->Alarm_Value) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_OFFNORMAL;
                     } else {
@@ -1979,9 +2008,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                    pTimeDelayNormal, then indicate a transition to the NORMAL
                    event state.
                 */
-                if ((PresentVal != pObject->Alarm_Value) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                     EVENT_ENABLE_TO_NORMAL)) {
+                if (PresentVal != pObject->Alarm_Value) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_NORMAL;
                     } else {
@@ -2007,13 +2034,27 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
 
             switch (ToState) {
                 case EVENT_STATE_NORMAL:
+                    NotifyEnabled = (pObject->Event_Enable &
+                                     EVENT_ENABLE_TO_NORMAL) != 0;
                     characterstring_init_ansi(
-                        &msgText, "Back to normal state from off-normal");
+                        &msgText,
+                        pObject->Event_Message_Texts_Custom
+                                [TRANSITION_TO_NORMAL]
+                            ? pObject->Event_Message_Texts_Custom
+                                  [TRANSITION_TO_NORMAL]
+                            : "Back to normal state from off-normal");
                     break;
 
                 case EVENT_STATE_OFFNORMAL:
+                    NotifyEnabled = (pObject->Event_Enable &
+                                     EVENT_ENABLE_TO_OFFNORMAL) != 0;
                     characterstring_init_ansi(
-                        &msgText, "Back to off-normal state from normal");
+                        &msgText,
+                        pObject->Event_Message_Texts_Custom
+                                [TRANSITION_TO_OFFNORMAL]
+                            ? pObject->Event_Message_Texts_Custom
+                                  [TRANSITION_TO_OFFNORMAL]
+                            : "Back to off-normal state from normal");
                     break;
 
                 default:
@@ -2146,10 +2187,15 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
             (unsigned)event_data.timeStamp.value.dateTime.time.min,
             (unsigned)event_data.timeStamp.value.dateTime.time.sec,
             (unsigned)event_data.timeStamp.value.dateTime.time.hundredths);
-        Notification_Class_common_reporting_function(&event_data);
+        /* A transition disabled in Event_Enable still sets the event state
+           and its time stamp, but sends nothing and needs no ack. */
+        if (NotifyEnabled) {
+            Notification_Class_common_reporting_function(&event_data);
+        }
 
         /* Ack required */
-        if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
+        if (NotifyEnabled &&
+            (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
             debug_log_fprintf(
                 DEBUG_LOG_DEBUG, stderr, "Binary-Value[%d]: Ack Required!\n",

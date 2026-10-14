@@ -194,6 +194,12 @@ BACNET_NOTIFY_TYPE Binary_Value_Notify_Type(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Binary_Value_Notify_Type_Set(
     uint32_t object_instance, BACNET_NOTIFY_TYPE notify_type);
+
+BACNET_STACK_EXPORT
+bool Binary_Value_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 #endif
 
 BACNET_STACK_EXPORT
